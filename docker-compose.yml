@@ -1,0 +1,48 @@
+services:
+  aria2:
+    image: p3terx/aria2-pro:latest
+    restart: unless-stopped
+    environment:
+      - RPC_SECRET=${ARIA2_SECRET}
+      - DISK_CACHE=64M
+      - IPV6_MODE=false
+    volumes:
+      - downloads:/downloads
+    expose:
+      - "6800"
+
+  api:
+    image: python:3.12-slim
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      API_TOKEN: ${API_TOKEN}
+      ARIA2_SECRET: ${ARIA2_SECRET}
+      MAX_CONNECTIONS: ${MAX_CONNECTIONS:-16}
+      SPLIT: ${SPLIT:-16}
+      MIN_SPLIT_SIZE: ${MIN_SPLIT_SIZE:-4M}
+      MAX_CONCURRENT_DOWNLOADS: ${MAX_CONCURRENT_DOWNLOADS:-3}
+    volumes:
+      - ./api:/app
+      - downloads:/downloads
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+             uvicorn app:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      - aria2
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - downloads:/downloads:ro
+    depends_on:
+      - api
+
+volumes:
+  downloads:
